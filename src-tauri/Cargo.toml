@@ -1,8 +1,8 @@
 [package]
-name = "tauri-app"
+name = "carf"
 version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
+description = "best dynamic debugger"
+authors = ["necpition205"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -23,4 +23,6 @@ tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 frida = { version = "0.17.1", features = ["auto-download"] }
+frida-gum = "0.17.1"
+rdev = "0.5.3"
 

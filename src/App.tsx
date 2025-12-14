@@ -1,6 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useMemo, useState } from "react";
-import "./App.css";
 
 type DeviceInfo = {
   id: string;
