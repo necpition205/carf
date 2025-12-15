@@ -5,12 +5,12 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "bun run compile && tsc && vite",
-    "build": "bun run compile && tsc && vite build",
+    "dev": "bun run compile:tools && tsc && vite",
+    "build": "bun run compile:tools && tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "compile": "frida-compile src-frida/index.ts -o src-frida/dist/index.js",
-    "compile:watch": "frida-compile src-frida/index.ts -o src-frida/dist/index.js -w"
+    "compile": "bun run scripts/compile.ts",
+    "compile:tools": "frida-compile src-frida/index.ts -o src-frida/dist/index.js -T none -S -B iife"
   },
   "dependencies": {
     "@bassbook/react": "^0.0.2",

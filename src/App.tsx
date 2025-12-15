@@ -1,26 +1,9 @@
-import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useMemo, useState } from "react";
 
-type DeviceInfo = {
-  id: string;
-  name: string;
-  device_type: string;
-};
-
-type ProcessInfo = {
-  pid: number;
-  name: string;
-};
-
-type SessionInfo = {
-  session_id: number;
-};
+import { useFridaStore } from "./features/frida";
+import { useInputStore } from "./features/input";
 
 function App() {
-  const [fridaVersion, setFridaVersion] = useState<string>("");
-  const [devices, setDevices] = useState<DeviceInfo[]>([]);
-  const [selectedDeviceId, setSelectedDeviceId] = useState<string>("");
-  const [processes, setProcesses] = useState<ProcessInfo[]>([]);
   const [processFilter, setProcessFilter] = useState<string>("");
   const [pidInput, setPidInput] = useState<string>("");
 
@@ -28,10 +11,40 @@ function App() {
   const [spawnArgvRaw, setSpawnArgvRaw] = useState<string>("");
   const [spawnedPid, setSpawnedPid] = useState<number | null>(null);
 
-  const [attachedSessionId, setAttachedSessionId] = useState<number | null>(null);
+  const [rpcMethod, setRpcMethod] = useState<string>("get_arch");
+  const [rpcParamsRaw, setRpcParamsRaw] = useState<string>("{}");
+  const [rpcResult, setRpcResult] = useState<string>("");
+  const [validationError, setValidationError] = useState<string | null>(null);
 
-  const [busy, setBusy] = useState<boolean>(false);
-  const [error, setError] = useState<string>("");
+  const inputListenerReady = useInputStore((s) => s.listenerReady);
+  const inputError = useInputStore((s) => s.error);
+  const lastKeyEvent = useInputStore((s) => s.lastKeyEvent);
+  const startInputListener = useInputStore((s) => s.startListener);
+
+  const {
+    busy,
+    error,
+    version: fridaVersion,
+    devices,
+    selectedDeviceId,
+    processes,
+    attachedSessionId,
+    loadedScriptId,
+
+    init,
+    clearError,
+    setSelectedDeviceId,
+    refreshDevices,
+    refreshProcesses,
+    attach: attachSession,
+    detach: detachSession,
+    spawn: spawnProcess,
+    resume,
+    kill,
+    loadDefaultScript,
+    unloadScript,
+    agentRequest,
+  } = useFridaStore();
 
   const filteredProcesses = useMemo(() => {
     const q = processFilter.trim().toLowerCase();
@@ -42,75 +55,24 @@ function App() {
     );
   }, [processFilter, processes]);
 
-  async function safeInvoke<T>(cmd: string, args?: Record<string, unknown>) {
-    setError("");
-    try {
-      return (await invoke(cmd, args)) as T;
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      setError(message);
-      throw e;
-    }
-  }
-
-  async function refreshVersion() {
-    const version = await safeInvoke<string>("frida_version");
-    setFridaVersion(version);
-  }
-
-  async function refreshDevices() {
-    const list = await safeInvoke<DeviceInfo[]>("frida_list_devices");
-    setDevices(list);
-
-    if (!selectedDeviceId) {
-      const defaultId = list.find((d) => d.id === "local")?.id ?? list[0]?.id ?? "";
-      setSelectedDeviceId(defaultId);
-    }
-  }
-
-  async function refreshProcesses(deviceId: string) {
-    if (!deviceId) {
-      setProcesses([]);
-      return;
-    }
-
-    const list = await safeInvoke<ProcessInfo[]>("frida_list_processes", {
-      device_id: deviceId,
-    });
-    setProcesses(list);
-  }
-
   async function attach() {
     const pid = Number(pidInput);
     if (!selectedDeviceId || !Number.isFinite(pid) || pid <= 0) {
-      setError("Select a device and enter a valid PID.");
+      setValidationError("Select a device and enter a valid PID.");
       return;
     }
 
-    setBusy(true);
-    try {
-      const session = await safeInvoke<SessionInfo>("frida_attach", {
-        device_id: selectedDeviceId,
-        pid,
-      });
-      setAttachedSessionId(session.session_id);
-    } finally {
-      setBusy(false);
-    }
+    setValidationError(null);
+    clearError();
+    await attachSession(pid);
   }
 
   async function detach() {
     if (attachedSessionId == null) return;
 
-    setBusy(true);
-    try {
-      await safeInvoke<void>("frida_detach", {
-        session_id: attachedSessionId,
-      });
-      setAttachedSessionId(null);
-    } finally {
-      setBusy(false);
-    }
+    setValidationError(null);
+    clearError();
+    await detachSession();
   }
 
   function parseArgv(raw: string): string[] | null {
@@ -130,13 +92,13 @@ function App() {
 
   async function spawn() {
     if (!selectedDeviceId) {
-      setError("Select a device first.");
+      setValidationError("Select a device first.");
       return;
     }
 
     const program = spawnProgram.trim();
     if (!program) {
-      setError("Enter a program to spawn.");
+      setValidationError("Enter a program to spawn.");
       return;
     }
 
@@ -145,60 +107,44 @@ function App() {
       argv = parseArgv(spawnArgvRaw);
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
-      setError(message);
+      setValidationError(message);
       return;
     }
 
-    setBusy(true);
-    try {
-      const pid = await safeInvoke<number>("frida_spawn", {
-        device_id: selectedDeviceId,
-        program,
-        argv,
-      });
-
-      setSpawnedPid(pid);
-      setPidInput(String(pid));
-      await refreshProcesses(selectedDeviceId);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function resume(pid: number) {
-    if (!selectedDeviceId) return;
-    await safeInvoke<void>("frida_resume", { device_id: selectedDeviceId, pid });
-  }
-
-  async function kill(pid: number) {
-    if (!selectedDeviceId) return;
-    await safeInvoke<void>("frida_kill", { device_id: selectedDeviceId, pid });
-    await refreshProcesses(selectedDeviceId);
+    setValidationError(null);
+    clearError();
+    const pid = await spawnProcess(program, argv);
+    setSpawnedPid(pid);
+    setPidInput(String(pid));
+    await refreshProcesses();
   }
 
   useEffect(() => {
     (async () => {
-      setBusy(true);
       try {
-        await refreshVersion();
-        await refreshDevices();
-      } finally {
-        setBusy(false);
+        await init();
+      } catch {
+        // errors are stored in the Frida store
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
+    void startInputListener();
+  }, [startInputListener]);
+
+  useEffect(() => {
     (async () => {
-      setBusy(true);
       try {
         await refreshProcesses(selectedDeviceId);
-      } finally {
-        setBusy(false);
+      } catch {
+        // errors are stored in the Frida store
       }
     })();
   }, [selectedDeviceId]);
+
+  const showError = validationError ?? error ?? inputError;
 
   return (
     <main className="container">
@@ -212,12 +158,11 @@ function App() {
           <button
             type="button"
             onClick={async () => {
-              setBusy(true);
               try {
                 await refreshDevices();
                 await refreshProcesses(selectedDeviceId);
-              } finally {
-                setBusy(false);
+              } catch {
+                // errors are stored in the Frida store
               }
             }}
             disabled={busy}
@@ -227,7 +172,18 @@ function App() {
         </div>
       </header>
 
-      {error ? <div className="error">{error}</div> : null}
+      {showError ? <div className="error">{showError}</div> : null}
+
+      <section className="panel">
+        <div className="fieldRow">
+          <div className="hint">Input: {inputListenerReady ? "listening" : "stopped"}</div>
+          <div className="mono">
+            {lastKeyEvent
+              ? `${lastKeyEvent.action} ${lastKeyEvent.key} (ctrl=${lastKeyEvent.modifiers.ctrl}, shift=${lastKeyEvent.modifiers.shift}, alt=${lastKeyEvent.modifiers.alt}, meta=${lastKeyEvent.modifiers.meta})`
+              : "-"}
+          </div>
+        </div>
+      </section>
 
       <section className="panel">
         <div className="fieldRow">
@@ -237,7 +193,11 @@ function App() {
           <select
             id="device-select"
             value={selectedDeviceId}
-            onChange={(e) => setSelectedDeviceId(e.currentTarget.value)}
+            onChange={(e) => {
+              setValidationError(null);
+              clearError();
+              setSelectedDeviceId(e.currentTarget.value);
+            }}
             disabled={busy}
           >
             <option value="">(select)</option>
@@ -251,11 +211,10 @@ function App() {
           <button
             type="button"
             onClick={async () => {
-              setBusy(true);
               try {
                 await refreshProcesses(selectedDeviceId);
-              } finally {
-                setBusy(false);
+              } catch {
+                // errors are stored in the Frida store
               }
             }}
             disabled={busy || !selectedDeviceId}
@@ -274,7 +233,10 @@ function App() {
               <input
                 id="pid-input"
                 value={pidInput}
-                onChange={(e) => setPidInput(e.currentTarget.value)}
+                onChange={(e) => {
+                  setValidationError(null);
+                  setPidInput(e.currentTarget.value);
+                }}
                 placeholder="1234"
               />
               <button type="button" onClick={attach} disabled={busy || !selectedDeviceId}>
@@ -303,7 +265,10 @@ function App() {
               <input
                 id="spawn-program"
                 value={spawnProgram}
-                onChange={(e) => setSpawnProgram(e.currentTarget.value)}
+                onChange={(e) => {
+                  setValidationError(null);
+                  setSpawnProgram(e.currentTarget.value);
+                }}
                 placeholder="/path/to/app (or package id)"
               />
             </div>
@@ -314,7 +279,10 @@ function App() {
               <input
                 id="spawn-argv"
                 value={spawnArgvRaw}
-                onChange={(e) => setSpawnArgvRaw(e.currentTarget.value)}
+                onChange={(e) => {
+                  setValidationError(null);
+                  setSpawnArgvRaw(e.currentTarget.value);
+                }}
                 placeholder='space-separated or ["--flag","x"]'
               />
               <button type="button" onClick={spawn} disabled={busy || !selectedDeviceId}>
@@ -330,11 +298,10 @@ function App() {
                 type="button"
                 onClick={async () => {
                   if (spawnedPid == null) return;
-                  setBusy(true);
                   try {
                     await resume(spawnedPid);
-                  } finally {
-                    setBusy(false);
+                  } catch {
+                    // errors are stored in the Frida store
                   }
                 }}
                 disabled={busy || spawnedPid == null || !selectedDeviceId}
@@ -345,12 +312,11 @@ function App() {
                 type="button"
                 onClick={async () => {
                   if (spawnedPid == null) return;
-                  setBusy(true);
                   try {
                     await kill(spawnedPid);
                     setSpawnedPid(null);
-                  } finally {
-                    setBusy(false);
+                  } catch {
+                    // errors are stored in the Frida store
                   }
                 }}
                 disabled={busy || spawnedPid == null || !selectedDeviceId}
@@ -358,8 +324,94 @@ function App() {
                 Kill
               </button>
             </div>
+
+            <div className="fieldRow">
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await loadDefaultScript();
+                  } catch {
+                    // errors are stored in the Frida store
+                  }
+                }}
+                disabled={busy || attachedSessionId == null || loadedScriptId != null}
+              >
+                Load Script
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await unloadScript();
+                  } catch {
+                    // errors are stored in the Frida store
+                  }
+                }}
+                disabled={busy || loadedScriptId == null}
+              >
+                Unload Script
+              </button>
+              <div className="hint">script_id: {loadedScriptId ?? "-"}</div>
+            </div>
           </div>
         </div>
+      </section>
+
+      <section className="panel">
+        <div className="fieldRow">
+          <label className="label" htmlFor="rpc-method">
+            RPC
+          </label>
+          <input
+            id="rpc-method"
+            value={rpcMethod}
+            onChange={(e) => {
+              setRpcResult("");
+              setRpcMethod(e.currentTarget.value);
+            }}
+            placeholder="get_arch"
+          />
+          <input
+            value={rpcParamsRaw}
+            onChange={(e) => {
+              setRpcResult("");
+              setRpcParamsRaw(e.currentTarget.value);
+            }}
+            placeholder='{"k":"v"}'
+          />
+          <button
+            type="button"
+            onClick={async () => {
+              setRpcResult("");
+              setValidationError(null);
+
+              let params: unknown = undefined;
+              const raw = rpcParamsRaw.trim();
+              if (raw) {
+                try {
+                  params = JSON.parse(raw);
+                } catch (e) {
+                  const message = e instanceof Error ? e.message : String(e);
+                  setValidationError(message);
+                  return;
+                }
+              }
+
+              try {
+                const result = await agentRequest(rpcMethod.trim(), params);
+                setRpcResult(JSON.stringify(result, null, 2));
+              } catch {
+                // errors are stored in the Frida store
+              }
+            }}
+            disabled={busy || loadedScriptId == null}
+          >
+            Call
+          </button>
+        </div>
+
+        {rpcResult ? <pre className="mono">{rpcResult}</pre> : null}
       </section>
 
       <section className="panel">
@@ -395,15 +447,10 @@ function App() {
                       type="button"
                       onClick={async () => {
                         setPidInput(String(p.pid));
-                        setBusy(true);
                         try {
-                          const session = await safeInvoke<SessionInfo>("frida_attach", {
-                            device_id: selectedDeviceId,
-                            pid: p.pid,
-                          });
-                          setAttachedSessionId(session.session_id);
-                        } finally {
-                          setBusy(false);
+                          await attachSession(p.pid);
+                        } catch {
+                          // errors are stored in the Frida store
                         }
                       }}
                       disabled={busy || !selectedDeviceId}
@@ -413,11 +460,10 @@ function App() {
                     <button
                       type="button"
                       onClick={async () => {
-                        setBusy(true);
                         try {
                           await resume(p.pid);
-                        } finally {
-                          setBusy(false);
+                        } catch {
+                          // errors are stored in the Frida store
                         }
                       }}
                       disabled={busy || !selectedDeviceId}
@@ -427,11 +473,10 @@ function App() {
                     <button
                       type="button"
                       onClick={async () => {
-                        setBusy(true);
                         try {
                           await kill(p.pid);
-                        } finally {
-                          setBusy(false);
+                        } catch {
+                          // errors are stored in the Frida store
                         }
                       }}
                       disabled={busy || !selectedDeviceId}
