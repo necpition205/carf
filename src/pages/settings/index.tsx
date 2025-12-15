@@ -60,7 +60,7 @@ export function SettingsPage({ fridaVersion }: SettingsPageProps) {
 
           {/* Content */}
           <Flex $direction="column" $gap="24px" style={{ flex: 1 }}>
-            <TabPanel value="general">
+            <TabPanel value="general" activeTab={tabs.value}>
               <Section $gap="16px">
                 <SectionTitle>General Settings</SectionTitle>
 
@@ -90,7 +90,7 @@ export function SettingsPage({ fridaVersion }: SettingsPageProps) {
               </Section>
             </TabPanel>
 
-            <TabPanel value="appearance">
+            <TabPanel value="appearance" activeTab={tabs.value}>
               <Section $gap="16px">
                 <SectionTitle>Appearance</SectionTitle>
 
@@ -117,7 +117,7 @@ export function SettingsPage({ fridaVersion }: SettingsPageProps) {
               </Section>
             </TabPanel>
 
-            <TabPanel value="about">
+            <TabPanel value="about" activeTab={tabs.value}>
               <Section $gap="16px">
                 <SectionTitle>About CARF</SectionTitle>
 

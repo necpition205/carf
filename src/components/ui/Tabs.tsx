@@ -26,11 +26,13 @@ export interface TabsProps {
   size?: TabSize;
   variant?: TabVariant;
   fullWidth?: boolean;
+  children?: ReactNode;
 }
 
 export interface TabPanelProps {
   value: string;
   children: ReactNode;
+  activeTab?: string; // Optional: use this instead of context
 }
 
 export interface TabsContextValue {
@@ -44,11 +46,16 @@ export interface TabsContextValue {
 const TabsContext = createContext<TabsContextValue | null>(null);
 
 export function useTabsContext() {
-  const context = useContext(TabsContext);
-  if (!context) {
-    throw new Error("TabPanel must be used within Tabs");
-  }
-  return context;
+  return useContext(TabsContext);
+}
+
+// Standalone provider for cases where TabPanel is used outside Tabs component
+export function TabsProvider({ value, children }: { value: string; children: ReactNode }) {
+  return (
+    <TabsContext.Provider value={{ activeTab: value }}>
+      {children}
+    </TabsContext.Provider>
+  );
 }
 
 // ============================================================================
@@ -157,6 +164,7 @@ export function Tabs({
   size = "md",
   variant = "default",
   fullWidth = false,
+  children,
 }: TabsProps) {
   const iconSize = sizeStyles[size].iconSize;
 
@@ -183,14 +191,22 @@ export function Tabs({
           );
         })}
       </TabsContainer>
+      {children}
     </TabsContext.Provider>
   );
 }
 
-export function TabPanel({ value, children }: TabPanelProps) {
-  const { activeTab } = useTabsContext();
+export function TabPanel({ value, children, activeTab }: TabPanelProps) {
+  const context = useTabsContext();
 
-  if (activeTab !== value) return null;
+  // Use prop if provided, otherwise use context
+  const currentTab = activeTab ?? context?.activeTab;
+
+  // If no activeTab source, always render (fallback)
+  if (currentTab === undefined) return <TabPanelContainer>{children}</TabPanelContainer>;
+
+  // Only render if active
+  if (currentTab !== value) return null;
 
   return <TabPanelContainer>{children}</TabPanelContainer>;
 }

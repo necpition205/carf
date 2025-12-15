@@ -150,7 +150,7 @@ export function JavaPage({ hasSession = false, onRpcCall }: JavaPageProps) {
           </EmptyState>
         ) : (
           <>
-            <TabPanel value="classes">
+            <TabPanel value="classes" activeTab={tabs.value}>
               {filteredClasses.length === 0 ? (
                 <EmptyState>
                   <Coffee size={32} />
@@ -194,7 +194,7 @@ export function JavaPage({ hasSession = false, onRpcCall }: JavaPageProps) {
               )}
             </TabPanel>
 
-            <TabPanel value="methods">
+            <TabPanel value="methods" activeTab={tabs.value}>
               {!selectedClass ? (
                 <EmptyState>
                   <Text $color="muted">Select a class to view methods</Text>

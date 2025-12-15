@@ -223,7 +223,7 @@ export function NativePage({ hasSession, onRpcCall }: NativePageProps) {
           </EmptyState>
         ) : (
           <>
-            <TabPanel value="modules">
+            <TabPanel value="modules" activeTab={tabs.value}>
               {filteredModules.length === 0 ? (
                 <EmptyState>
                   <Package size={32} />
@@ -273,7 +273,7 @@ export function NativePage({ hasSession, onRpcCall }: NativePageProps) {
               )}
             </TabPanel>
 
-            <TabPanel value="exports">
+            <TabPanel value="exports" activeTab={tabs.value}>
               {!selectedModule ? (
                 <EmptyState>
                   <FileCode size={32} />
@@ -319,7 +319,7 @@ export function NativePage({ hasSession, onRpcCall }: NativePageProps) {
               )}
             </TabPanel>
 
-            <TabPanel value="imports">
+            <TabPanel value="imports" activeTab={tabs.value}>
               {!selectedModule ? (
                 <EmptyState>
                   <FileCode size={32} />

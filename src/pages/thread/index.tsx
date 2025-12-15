@@ -34,7 +34,15 @@ import {
 export interface ThreadInfo {
   id: number;
   state: string;
-  context: Record<string, string>;
+  context: Record<string, unknown>;
+}
+
+export interface BacktraceFrame {
+  address?: string;
+  moduleName?: string;
+  symbol?: string;
+  fileName?: string;
+  lineNumber?: number;
 }
 
 export interface ThreadPageProps {
@@ -49,8 +57,31 @@ export interface ThreadPageProps {
 export function ThreadPage({ hasSession, onRpcCall }: ThreadPageProps) {
   const [threads, setThreads] = useState<ThreadInfo[]>([]);
   const [selectedThread, setSelectedThread] = useState<ThreadInfo | null>(null);
-  const [backtrace, setBacktrace] = useState<string[]>([]);
+  const [backtrace, setBacktrace] = useState<Array<string | BacktraceFrame>>([]);
   const [loading, setLoading] = useState(false);
+
+  const formatSymbolLike = (value: unknown) => {
+    if (!value) return "-";
+    if (typeof value === "string" || typeof value === "number" || typeof value === "bigint") {
+      return String(value);
+    }
+    if (typeof value === "object") {
+      const v = value as Partial<BacktraceFrame>;
+      const addr = v.address ? String(v.address) : "";
+      const mod = v.moduleName ? String(v.moduleName) : "";
+      const sym = v.symbol ? String(v.symbol) : "";
+      const file = v.fileName ? String(v.fileName) : "";
+      const line = typeof v.lineNumber === "number" ? v.lineNumber : undefined;
+
+      const left = [addr, mod && sym ? `${mod}!${sym}` : mod || sym].filter(Boolean).join(" ");
+      const right = file ? `${file}${line !== undefined ? `:${line}` : ""}` : "";
+      const formatted = [left, right && `(${right})`].filter(Boolean).join(" ");
+
+      return formatted || JSON.stringify(value);
+    }
+
+    return String(value);
+  };
 
   const loadThreads = async () => {
     if (!hasSession) return;
@@ -69,7 +100,11 @@ export function ThreadPage({ hasSession, onRpcCall }: ThreadPageProps) {
     if (!hasSession) return;
     try {
       const result = await onRpcCall("get_backtrace", { threadId });
-      setBacktrace(result as string[]);
+      if (Array.isArray(result)) {
+        setBacktrace(result as Array<string | BacktraceFrame>);
+      } else {
+        setBacktrace([]);
+      }
     } catch (e) {
       console.error("Failed to load backtrace:", e);
       setBacktrace([]);
@@ -166,7 +201,7 @@ export function ThreadPage({ hasSession, onRpcCall }: ThreadPageProps) {
                         <Badge $variant={getStateColor(thread.state)}>{thread.state}</Badge>
                       </TableCell>
                       <TableCell mono truncate>
-                        {thread.context?.pc || "-"}
+                        {formatSymbolLike(thread.context?.pc)}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -186,7 +221,7 @@ export function ThreadPage({ hasSession, onRpcCall }: ThreadPageProps) {
                       {Object.entries(selectedThread.context || {}).map(([reg, val]) => (
                         <Flex key={reg} $justify="between">
                           <Text $color="muted" $mono>{reg}</Text>
-                          <Code>{val}</Code>
+                          <Code>{formatSymbolLike(val)}</Code>
                         </Flex>
                       ))}
                     </Flex>
@@ -203,7 +238,7 @@ export function ThreadPage({ hasSession, onRpcCall }: ThreadPageProps) {
                         {backtrace.map((frame, i) => (
                           <Flex key={i} $gap="8px">
                             <Text $color="muted" $size="xs">#{i}</Text>
-                            <Code style={{ fontSize: 11 }}>{frame}</Code>
+                            <Code style={{ fontSize: 11 }}>{formatSymbolLike(frame)}</Code>
                           </Flex>
                         ))}
                       </Flex>

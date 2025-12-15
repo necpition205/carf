@@ -226,7 +226,7 @@ export function MemoryPage({ hasSession, onRpcCall }: MemoryPageProps) {
       </Toolbar>
 
       <PageContent>
-        <TabPanel value="read">
+          <TabPanel value="read" activeTab={tabs.value}>
           <Card $padding="16px">
             <FormRow style={{ marginBottom: 16 }}>
               <FormGroup style={{ flex: 1 }}>
@@ -271,7 +271,7 @@ export function MemoryPage({ hasSession, onRpcCall }: MemoryPageProps) {
           )}
         </TabPanel>
 
-        <TabPanel value="write">
+        <TabPanel value="write" activeTab={tabs.value}>
           <Card $padding="16px">
             <FormGroup style={{ marginBottom: 16 }}>
               <Label>Address</Label>
@@ -301,7 +301,7 @@ export function MemoryPage({ hasSession, onRpcCall }: MemoryPageProps) {
           </Card>
         </TabPanel>
 
-        <TabPanel value="search">
+        <TabPanel value="search" activeTab={tabs.value}>
           <Card $padding="16px">
             <FormRow style={{ marginBottom: 16 }}>
               <FormGroup style={{ flex: 1 }}>
@@ -341,7 +341,7 @@ export function MemoryPage({ hasSession, onRpcCall }: MemoryPageProps) {
           )}
         </TabPanel>
 
-        <TabPanel value="ranges">
+        <TabPanel value="ranges" activeTab={tabs.value}>
           <Toolbar>
             <FormGroup>
               <Input
